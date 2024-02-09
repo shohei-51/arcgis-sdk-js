@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta viewport="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Layer Load Performance with Bookmarks</title>
+    <style>
+        html,
+        body,
+        #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        #inputDiv,
+        #loadTimeDisplay,
+        #bookmarksDiv {
+            position: absolute;
+            z-index: 99;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+
+        #inputDiv {
+            top: 10px;
+            left: 50px;
+        }
+
+        #loadTimeDisplay {
+            top: 10px;
+            right: 50px;
+        }
+
+        #bookmarksDiv {
+            top: 80px;
+            right: 50px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.25/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.25/"></script>
+    <script>
+        require([
+            "esri/views/MapView",
+            "esri/WebMap",
+            "esri/core/reactiveUtils",
+            "esri/widgets/Bookmarks"
+        ], (
+            MapView,
+            WebMap,
+            reactiveUtils,
+            Bookmarks
+        ) => {
+            let view;
+            let messages = new Object();
+
+            function loadWebMap(id) {
+                const webmap = new WebMap({
+                    portalItem: { id }
+                });
+
+                view = new MapView({
+                    map: webmap,
+                    container: "viewDiv"
+                });
+
+                const bookmarks = new Bookmarks({
+                    view: view,
+                    visibleElements: {
+                        bookmarkCreationTool: false
+                    }
+                });
+
+                const bookmarksContainer = document.createElement("div");
+                bookmarksContainer.id = "bookmarksDiv";
+                view.ui.add(bookmarksContainer, "top-right");
+                bookmarks.container = bookmarksContainer;
+
+                webmap.load().then(() => {
+                    webmap.allLayers.forEach(layer => {
+                        view.whenLayerView(layer).then(layerView => {
+                            let layerUpdateTimeStart;
+                            let layerUpdateTimeEnd;
+
+                            reactiveUtils.watch(() => layerView.updating, (updating) => {
+                                if (updating) {
+                                    layerUpdateTimeStart = performance.now();
+                                } else {
+                                    layerUpdateTimeEnd = performance.now();
+                                    const layerUpdateTime = layerUpdateTimeEnd - layerUpdateTimeStart;
+                                    const message = `${layer.title} : ${layerUpdateTime.toFixed(2)} ms`;
+                                    messages[`${layer.id}`] = message;
+                                    updateLoadTimeDisplay();
+                                }
+                            });
+                        }).catch(error => {
+                            console.error("Error creating LayerView", error);
+                        });
+                    });
+                });
+            }
+
+            function updateLoadTimeDisplay(message) {
+                const displayDiv = document.getElementById('loadTimeDisplay');
+                displayDiv.innerHTML = "";
+                for (key in messages) {
+                    displayDiv.innerHTML += `<div>${messages[key]}</div>`;
+                }
+            }
+
+            document.getElementById('loadButton').addEventListener('click', () => {
+                const id = document.getElementById('webmapId').value;
+                document.getElementById('loadTimeDisplay').innerHTML = '';
+                loadWebMap(id);
+            });
+        });
+    </script>
+</head>
+
+<body>
+    <div id="inputDiv">
+        <input type="text" id="webmapId" placeholder="Enter WebMap ID" value="6dc79a58501345fd8ca038d23515a8cf" />
+        <button id="loadButton">Load WebMap</button>
+    </div>
+    <div id="loadTimeDisplay"></div>
+    <div id="viewDiv"></div>
+</body>
+
+</html>
